@@ -1,0 +1,60 @@
+---
+
+- name: Install snmpd daemon for debian family
+  package: name=snmpd state=latest
+
+- name: Install snmpd utils for debian family
+  package: name=libsnmp-dev state=latest
+
+- name: Install xinetd daemon
+  package: name=xinetd state=latest
+
+- name: import snmpd.conf template
+  template: src={{ roles_dir }}/snmpd/templates/snmpd.conf dest=/etc/snmp/snmpd.conf owner=root group=root mode=0640
+  register: snmpd
+
+- name: agent dir check
+  shell: mkdir -p /usr/lib/observium_agent && mkdir -p /usr/lib/observium_agent &&  mkdir -p /usr/lib/observium_agent/local
+
+- name: import xinetd template
+  copy: src={{ roles_dir }}/snmpd/templates/observium_agent_xinetd dest=/etc/xinetd.d/observium_agent_xinetd owner=root group=root mode=0640
+
+- name: import agent
+  copy: src={{ roles_dir }}/snmpd/templates/observium_agent dest=/usr/bin/observium_agent
+
+- name: copy required agent modules
+  copy: src={{ item }} dest=/usr/lib/observium_agent/local/ mode=0777
+  with_fileglob:
+        - {{ playbook_dir }}/roles/snmpd/files/agent-local/dmi
+        - {{ playbook_dir }}/roles/snmpd/files/agent-local/rpm
+        - {{ playbook_dir }}/roles/snmpd/files/agent-local/dpkg
+        - {{ playbook_dir }}/roles/snmpd/files/agent-local/nginx
+
+- name: copy distro agent modules
+  copy: src={{ item }} dest=/usr/bin/ mode=0777
+  with_fileglob:
+        - {{ playbook_dir }}//roles/snmpd/files/agent-local/distro
+
+- name: stop snmpd daemon
+  systemd: name=snmpd state=stopped
+
+- name: Create community and hashing algorithm for Debian based distros
+  shell: net-snmp-config --create-snmpv3-user -ro -A dasflekn32mkfwJewt426Qg0rEudbR2GaNNgGb41TvoewBhSdwdadwa2edd2d2d2 -X nWKXRz3ODbPdwadwadwa45465a4wd65aw4 -a SHA -x AES v3useAr
+
+
+- name: Clean snmpd config
+  shell: echo -n > /usr/share/snmp/snmpd.conf
+
+- name: Place correct snmpv3 user
+  lineinfile:
+     path: /usr/share/snmp/snmpd.conf
+     regexp: '(.*)'
+     line: "{{ user }}"
+
+- name: Restart snmpd daemon
+  systemd: name=snmpd state=restarted enabled=yes
+
+- name: Restart xinetd daemon
+  systemd: name=xinetd state=restarted enabled=yes
+...
+

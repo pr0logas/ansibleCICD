@@ -1,0 +1,7 @@
+---
+- hosts: prod_databases
+  become_user: root
+#  vars_files:
+#        - defaults/main.yml
+  roles:
+        - os-update-upgrade

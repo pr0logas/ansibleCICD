@@ -1,0 +1,33 @@
+---
+# update and reboot role with Bash and Perl scripts
+
+- name: install perl package
+  package: name=perl state=latest
+
+- name: update the system for Centos Family OS
+  yum: name=* state=latest
+  when: ansible_distribution == 'CentOS' or ansible_distribution == 'Red Hat Enterprise Linux'
+
+- name: update the system for Debian Family OS
+  shell: apt-get update && apt-get upgrade -y
+  when: ansible_distribution == 'Debian' or ansible_distribution == 'Ubuntu'
+
+- name: Check if reboot required
+# shell: LAST_KERNEL=$(rpm -q --last kernel | perl -pe 's/^kernel-(\S+).*/$1/' | head -1); CURRENT_KERNEL=$(uname -r); if [ $LAST_KERNEL != $CURRENT_KERNEL ]; then echo 'reboot'; else echo 'no'; fi
+  shell: LAST_KERNEL=$(rpm -q --last kernel | awk 'NR==1{sub(/kernel-/,""); print $1}'); CURRENT_KERNEL=$(uname -r); if [ $LAST_KERNEL != $CURRENT_KERNEL ]; then echo 'reboot'; else echo 'no'; fi
+  ignore_errors: true
+  register: reboot_hint
+
+- name: Execute rebooting
+  command: /sbin/shutdown -r +1
+  async: 0
+  poll: 0
+  ignore_errors: True
+  when: reboot_hint.stdout.find("reboot") != -1
+  register: rebooting
+
+- name: Reboot a server and wait for it come back!
+  wait_for: port=22 host='{{ (ansible_ssh_host|default(ansible_host))|default(inventory_hostname) }}' search_regex=OpenSSH delay=70 timeout=900
+  connection: local
+  when: reboot_hint.stdout.find("reboot") != -1
+...
